@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autorização Etsy — Magic Makers</title>
+<style>
+  body{
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:#fdf1f6; font-family:Inter,Arial,sans-serif; color:#2b2540; padding:24px;
+  }
+  .card{
+    max-width:520px; background:#fff; border:1px solid #f1e6ee; border-radius:18px;
+    padding:32px; text-align:center;
+  }
+  h1{font-size:19px; margin:0 0 12px;}
+  p{font-size:13.5px; color:#8b859c; margin:0 0 18px;}
+  .code-box{
+    background:#f7f3f9; border:1px solid #e3d9f0; border-radius:12px; padding:16px;
+    font-family:'IBM Plex Mono', monospace; font-size:13px; word-break:break-all;
+    margin-bottom:16px; user-select:all;
+  }
+  button{
+    background:linear-gradient(135deg,#f0498c,#7c6fee); color:white; border:none;
+    padding:10px 20px; border-radius:100px; font-weight:600; cursor:pointer; font-size:13px;
+  }
+  .missing{color:#f0506e; font-size:13px;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Autorização recebida ✅</h1>
+    <p>Copie o código abaixo e envie para quem está configurando o dashboard. Esta página não envia nada para lugar nenhum — só exibe o que a Etsy te devolveu.</p>
+    <div id="output" class="code-box">Lendo...</div>
+    <button onclick="copyCode()">Copiar código</button>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    const error = params.get('error');
+    const output = document.getElementById('output');
+
+    if (error) {
+      output.innerHTML = `<span class="missing">A Etsy retornou um erro: ${error}. Tente autorizar novamente.</span>`;
+    } else if (code) {
+      output.textContent = code;
+    } else {
+      output.innerHTML = `<span class="missing">Nenhum código encontrado na URL. Confirme que você chegou aqui através do link de autorização da Etsy.</span>`;
+    }
+
+    function copyCode(){
+      if (code) {
+        navigator.clipboard.writeText(code);
+        alert("Código copiado!");
+      }
+    }
+  </script>
+</body>
+</html>
