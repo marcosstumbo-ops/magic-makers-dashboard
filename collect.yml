@@ -1,0 +1,39 @@
+name: Coletar dados da Etsy
+
+on:
+  # 08:00-23:55 BRT = 11:00-02:55 UTC (dois trechos por causa da virada do dia em UTC)
+  schedule:
+    - cron: "*/5 11-23 * * *"   # 08:00 às 20:55 BRT
+    - cron: "*/5 0-2 * * *"     # 21:00 às 23:55 BRT (madrugada em UTC)
+  workflow_dispatch: {}  # permite rodar manualmente pelo GitHub, se precisar testar
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Rodar coletor
+        env:
+          ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
+          ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET }}
+          ETSY_REFRESH_TOKEN: ${{ secrets.ETSY_REFRESH_TOKEN }}
+          ETSY_SHOP_ID: ${{ secrets.ETSY_SHOP_ID }}
+        run: python collector.py
+
+      - name: Salvar data.json e state.json no repositório
+        run: |
+          git config user.name "coletor-etsy"
+          git config user.email "coletor@magicmakers.local"
+          git add data.json state.json
+          git diff --quiet --cached || git commit -m "Atualiza dados da loja"
+          git push

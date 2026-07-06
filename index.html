@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magic Makers Arts — Painel de Vendas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fdf1f6;
+    --panel:#ffffff;
+    --ink:#2b2540;
+    --ink-dim:#8b859c;
+    --line:#f1e6ee;
+    --pink1:#f0498c; --pink2:#b23a73;
+    --purple1:#7c6fee; --purple2:#5b4fd6;
+    --blue1:#3fa9f5; --blue2:#2f7fe0;
+    --amber1:#ffb648; --amber2:#ff8a3d;
+    --green:#28c38f; --red:#f0506e;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:'Inter',sans-serif;min-height:100vh;
+  }
+  h1,h2,h3,.num{font-family:'Poppins',sans-serif;}
+
+  .shell{display:flex;min-height:100vh;}
+
+  .sidebar{
+    width:220px;flex-shrink:0;background:var(--panel);
+    border-right:1px solid var(--line);padding:22px 16px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .logo{display:flex;align-items:center;gap:10px;padding:6px 8px 22px;}
+  .logo .chip{
+    width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(135deg,var(--pink1),var(--purple1));
+    display:flex;align-items:center;justify-content:center;
+    color:white;font-weight:700;font-size:14px;
+  }
+  .logo .name{font-weight:600;font-size:14.5px;}
+  .logo .sub{font-size:10.5px;color:var(--ink-dim);margin-top:-2px;}
+  .navitem{
+    display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;
+    font-size:13.5px;color:var(--ink-dim);cursor:pointer;text-decoration:none;
+    border-left:3px solid transparent;
+  }
+  .navitem svg{width:16px;height:16px;flex-shrink:0;}
+  .navitem.active{background:#fdf1f6;color:var(--pink1);font-weight:600;border-left-color:var(--pink1);}
+  .navitem:hover:not(.active){background:#faf7fb;}
+
+  .main{flex:1;padding:26px 30px 60px;max-width:1240px;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:14px;}
+  .topbar h1{font-size:21px;margin:0;}
+  .topbar .greet{font-size:12.5px;color:var(--ink-dim);margin-top:2px;}
+
+  .period-toggle{
+    display:flex;background:var(--panel);border-radius:100px;padding:4px;
+    border:1px solid var(--line);
+  }
+  .month-select{
+    border:1px solid var(--line);background:var(--panel);border-radius:100px;
+    padding:9px 16px;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;
+    color:var(--ink);cursor:pointer;
+  }
+  .period-toggle button{
+    border:none;background:transparent;padding:8px 18px;border-radius:100px;
+    font-family:'Inter',sans-serif;font-size:12.5px;font-weight:600;color:var(--ink-dim);cursor:pointer;
+  }
+  .period-toggle button.active{background:linear-gradient(135deg,var(--pink1),var(--purple1));color:white;}
+
+  .row{display:grid;gap:20px;margin-bottom:20px;}
+  .row.hero{grid-template-columns:1.6fr 1fr;}
+  .row.cards4{grid-template-columns:repeat(4,1fr);}
+  .row.health{grid-template-columns:1fr 1.5fr;}
+  @media(max-width:980px){.row.hero{grid-template-columns:1fr;}.row.cards4{grid-template-columns:repeat(2,1fr);}.row.health{grid-template-columns:1fr;}}
+
+  /* Cadence alert panel */
+  .cadence-panel{display:flex;flex-direction:column;justify-content:center;}
+  .cadence-days{display:flex;align-items:baseline;gap:8px;}
+  .cadence-days .n{font-size:40px;font-weight:700;font-family:'Poppins';}
+  .cadence-days .u{font-size:13px;color:var(--ink-dim);}
+  .cadence-status{
+    display:inline-flex;align-items:center;gap:6px;margin-top:10px;
+    padding:5px 12px;border-radius:100px;font-size:11.5px;font-weight:600;width:fit-content;
+  }
+  .cadence-status.ok{background:#e6faf3;color:var(--green);}
+  .cadence-status.warn{background:#fff3e0;color:#e08a1a;}
+  .cadence-status.bad{background:#fdeaee;color:var(--red);}
+  .cadence-sub{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:12px;color:var(--ink-dim);}
+  .cadence-sub b{display:block;font-size:15px;color:var(--ink);font-family:'Poppins';font-weight:600;}
+
+  /* Star Seller panel */
+  .ss-metric{margin-bottom:14px;}
+  .ss-metric:last-child{margin-bottom:0;}
+  .ss-metric-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .ss-metric-label{font-size:12.5px;color:var(--ink);font-weight:500;}
+  .ss-metric-val{font-size:12.5px;font-family:'Poppins';font-weight:600;display:flex;align-items:center;gap:6px;}
+  .ss-bar-track{height:7px;border-radius:100px;background:#f1eef7;overflow:hidden;}
+  .ss-bar-fill{height:100%;border-radius:100px;}
+  .ss-pill{font-size:10px;padding:2px 8px;border-radius:100px;font-weight:700;}
+  .ss-pill.pass{background:#e6faf3;color:var(--green);}
+  .ss-pill.fail{background:#fdeaee;color:var(--red);}
+
+  .panel{background:var(--panel);border-radius:18px;padding:22px;border:1px solid var(--line);}
+  .panel-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
+  .panel-head h3{font-size:14px;margin:0;color:var(--ink);}
+  .panel-head .tag{font-size:11px;color:var(--ink-dim);font-family:'Inter';}
+
+  .hero-num{font-size:32px;font-weight:700;margin:2px 0 0;}
+  .hero-sub{font-size:12px;color:var(--ink-dim);margin-bottom:16px;}
+  .hero-chart{height:150px;position:relative;}
+  .quickstats{display:flex;gap:0;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);flex-wrap:wrap;}
+  .qs-item{flex:1;min-width:110px;display:flex;align-items:center;gap:10px;}
+  .qs-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;}
+  .qs-val{font-weight:700;font-size:13.5px;font-family:'Poppins';}
+  .qs-label{font-size:10.5px;color:var(--ink-dim);}
+
+  .donut-wrap{display:flex;align-items:center;justify-content:center;position:relative;height:160px;}
+  .donut-center{position:absolute;text-align:center;}
+  .donut-center .n{font-size:20px;font-weight:700;font-family:'Poppins';}
+  .donut-center .l{font-size:10px;color:var(--ink-dim);}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:14px;justify-content:center;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-dim);}
+  .legend-dot{width:9px;height:9px;border-radius:50%;}
+
+  .stat-card{border-radius:18px;padding:20px;color:white;position:relative;overflow:hidden;min-height:118px;}
+  .stat-card .label{font-size:12.5px;opacity:.92;font-weight:500;}
+  .stat-card .value{font-size:26px;font-weight:700;margin-top:8px;font-family:'Poppins';}
+  .stat-card .trend{font-size:11px;margin-top:6px;opacity:.95;font-family:'Inter';}
+  .stat-card .icon{position:absolute;right:16px;top:16px;font-size:20px;opacity:.85;}
+  .sc-pink{background:linear-gradient(135deg,var(--pink1),var(--pink2));}
+  .sc-purple{background:linear-gradient(135deg,var(--purple1),var(--purple2));}
+  .sc-blue{background:linear-gradient(135deg,var(--blue1),var(--blue2));}
+  .sc-amber{background:linear-gradient(135deg,var(--amber1),var(--amber2));}
+
+  .compare-chart{height:180px;position:relative;}
+  .compare-legend{display:flex;gap:18px;margin-top:12px;font-size:12px;color:var(--ink-dim);}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{
+    text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--ink-dim);font-weight:600;padding:0 10px 10px;border-bottom:1px solid var(--line);
+  }
+  tbody td{padding:12px 10px;border-bottom:1px solid var(--line);}
+  tbody tr:last-child td{border-bottom:none;}
+  .prod-name{font-weight:600;font-size:13px;}
+  .badge{
+    display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:100px;
+    font-size:11px;font-weight:600;
+  }
+  .badge.up{background:#e6faf3;color:var(--green);}
+  .badge.down{background:#fdeaee;color:var(--red);}
+  .badge.flat{background:#f1eef7;color:var(--ink-dim);}
+
+  .foot-note{
+    margin-top:26px;padding-top:16px;border-top:1px solid var(--line);
+    font-size:11.5px;color:var(--ink-dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+  }
+  .foot-note b{color:var(--pink1);}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="sidebar">
+    <div class="logo">
+      <div class="chip">MM</div>
+      <div>
+        <div class="name">Magic Makers</div>
+        <div class="sub">Painel de vendas</div>
+      </div>
+    </div>
+    <a class="navitem active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Visão geral</a>
+    <a class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7L12 3 4 7v10l8 4 8-4V7z"/><path d="M4 7l8 4 8-4"/><path d="M12 11v10"/></svg>Produtos</a>
+    <a class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>Tráfego</a>
+    <a class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>Financeiro</a>
+    <a class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.13.36.33.7.6 1H21a2 2 0 010 4h-.09c-.27.3-.47.64-.51 1z"/></svg>Configurações</a>
+  </div>
+
+  <div class="main">
+
+    <div class="topbar">
+      <div>
+        <h1>Visão geral</h1>
+        <div class="greet">Magic Makers Arts · última atualização às <span id="updTime">14:32</span></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <select id="monthSelect" class="month-select">
+          <option value="2026-07" selected>Julho 2026</option>
+          <option value="2026-06">Junho 2026</option>
+          <option value="2026-05">Maio 2026</option>
+        </select>
+        <div class="period-toggle" id="periodToggle">
+          <button data-period="daily" class="active">Diário</button>
+          <button data-period="weekly">Semanal</button>
+          <button data-period="monthly">Mensal</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row cards4">
+      <div class="stat-card sc-pink"><span class="icon">💰</span><div class="label">Faturamento bruto</div><div class="value" id="sc-gross">R$99,30</div><div class="trend" id="sc-gross-t">▲ 12% vs. anterior</div></div>
+      <div class="stat-card sc-purple"><span class="icon">✓</span><div class="label">Líquido (pós-taxas)</div><div class="value" id="sc-net">R$79,10</div><div class="trend" id="sc-net-t">▲ 12% vs. anterior</div></div>
+      <div class="stat-card sc-blue"><span class="icon">📦</span><div class="label">Pedidos</div><div class="value" id="sc-orders">7</div><div class="trend" id="sc-orders-t">▲ 18% vs. anterior</div></div>
+      <div class="stat-card sc-amber"><span class="icon">👁</span><div class="label">Visitas totais</div><div class="value" id="sc-visits">312</div><div class="trend" id="sc-visits-t">▼ 4% vs. anterior</div></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:20px;">
+      <div class="panel-head">
+        <h3 id="compareTitle">Comparativo — esta semana vs. semana anterior</h3>
+        <span class="tag">Faturamento líquido</span>
+      </div>
+      <div class="compare-chart"><canvas id="compareChart"></canvas></div>
+      <div class="compare-legend">
+        <span><span class="sw" style="background:var(--pink1)"></span>Período atual</span>
+        <span><span class="sw" style="background:#e3d9f0"></span>Período anterior</span>
+      </div>
+    </div>
+
+    <div class="row" style="grid-template-columns:1fr;">
+      <div class="panel cadence-panel" id="cadencePanel">
+        <div class="panel-head" style="margin-bottom:2px;"><h3>Cadência de publicação</h3></div>
+        <div class="cadence-days"><span class="n" id="cadenceDays">38</span><span class="u">dias sem publicar</span></div>
+        <div class="cadence-status bad" id="cadenceStatus">⚠ Risco alto — publique um anúncio esta semana</div>
+        <div class="cadence-sub">
+          <div><b id="cadenceActive">42</b>anúncios ativos</div>
+          <div><b id="cadenceNew30">0</b>criados nos últimos 30 dias</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="grid-template-columns:1fr;">
+      <div class="panel">
+        <div class="panel-head">
+          <div><h3 id="heroLabel">Faturamento líquido — hoje</h3></div>
+          <span class="tag" id="heroRange">06 jul 2026</span>
+        </div>
+        <div class="hero-num num" id="heroValue">R$79,10</div>
+        <div class="hero-sub" id="heroSub">12 pedidos · ticket médio R$6,59</div>
+        <div class="hero-chart"><canvas id="heroChart"></canvas></div>
+        <div class="quickstats">
+          <div class="qs-item">
+            <div class="qs-icon" style="background:#fdeaf1;color:var(--pink1);">👁</div>
+            <div><div class="qs-val" id="qsVisits">312</div><div class="qs-label">Visitas totais (aprox.)</div></div>
+          </div>
+          <div class="qs-item">
+            <div class="qs-icon" style="background:#eeecfd;color:var(--purple1);">%</div>
+            <div><div class="qs-val" id="qsConv">3,8%</div><div class="qs-label">Conversão (aprox.)</div></div>
+          </div>
+          <div class="qs-item">
+            <div class="qs-icon" style="background:#e7f4fd;color:var(--blue1);">★</div>
+            <div><div class="qs-val" id="qsBest">Mega Bundle</div><div class="qs-label">Mais vendido</div></div>
+          </div>
+          <div class="qs-item">
+            <div class="qs-icon" style="background:#fff3e6;color:var(--amber2);">↑</div>
+            <div><div class="qs-val" id="qsGrowth">+12%</div><div class="qs-label">vs. período anterior</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Desempenho por produto</h3>
+        <span class="tag" id="tableRange">Hoje</span>
+      </div>
+      <table>
+        <thead><tr><th>Produto</th><th>Visitas</th><th>Favoritos</th><th>Vendas</th><th>Conversão</th><th>Faturamento</th><th>Tendência</th></tr></thead>
+        <tbody id="productRows"></tbody>
+      </table>
+    </div>
+
+    <div class="foot-note">
+      <span>Fonte: <b>dados de exemplo</b> — pronto para receber a integração real com a API da Etsy</span>
+      <span>Visitas: aproximadas por diferença entre leituras do contador acumulado de cada anúncio (a Etsy não expõe visitas por período via API)</span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const PERIODS = {
+  daily: {
+    label: "Faturamento líquido — hoje",
+    range: "06 jul 2026",
+    tableRange: "Hoje",
+    compareTitle: "Comparativo — hoje vs. ontem",
+    stats: { gross: 99.30, net: 79.10, orders: 7, visits: 312, avgTicket: 14.19, conv: 3.8, growthNet: 12, growthGross: 12, growthOrders: 18, growthVisits: -4 },
+    best: "Mega Bundle",
+    heroSeries: { current: [4,9,6,14,10,18,12,0,0,0,0,0,0,0,0,0], previous: [3,7,8,9,8,12,9,0,0,0,0,0,0,0,0,0], labels:["08h","09h","10h","11h","12h","13h","14h","15h","16h","17h","18h","19h","20h","21h","22h","23h"] },
+    compareSeries: { pairs:[{label:"Hoje",cur:79.10,prev:70.40}] },
+    traffic: [ {label:"Busca Etsy", value:150, color:"#f0498c"}, {label:"Etsy Ads", value:70, color:"#7c6fee"}, {label:"Google", value:52, color:"#3fa9f5"}, {label:"Redes sociais", value:24, color:"#ffb648"}, {label:"Direto", value:16, color:"#28c38f"} ],
+    products: [
+      {name:"Mega Bundle 200+ PNGs", visits:88, favorites:214, sales:3, revenue:39.90, trend:"up"},
+      {name:"Cruise SVG — Disney Wish", visits:64, favorites:97, sales:2, revenue:19.80, trend:"up"},
+      {name:"Side Characters Bundle", visits:57, favorites:88, sales:1, revenue:15.60, trend:"flat"},
+      {name:"Pennant Flag Set (30 un.)", visits:41, favorites:52, sales:1, revenue:11.90, trend:"up"},
+      {name:"Cabin Banner 2x6 Printable", visits:62, favorites:143, sales:0, revenue:0, trend:"down"}
+    ]
+  },
+  weekly: {
+    label: "Faturamento líquido — esta semana",
+    range: "30 jun – 06 jul 2026",
+    tableRange: "Últimos 7 dias",
+    compareTitle: "Comparativo — esta semana vs. semana anterior",
+    stats: { gross: 542.80, net: 431.20, orders: 46, visits: 2180, avgTicket: 11.80, conv: 2.1, growthNet: 8, growthGross: 9, growthOrders: 6, growthVisits: -9 },
+    best: "Mega Bundle",
+    heroSeries: { current:[61.4,74.2,58.9,82.5,69.0,91.3,79.1], previous:[54.0,66.1,60.2,70.0,65.5,80.0,74.2], labels:["30/06","01/07","02/07","03/07","04/07","05/07","06/07"] },
+    compareSeries: { pairs:[
+      {label:"Seg",cur:61.4,prev:54.0},{label:"Ter",cur:74.2,prev:66.1},{label:"Qua",cur:58.9,prev:60.2},
+      {label:"Qui",cur:82.5,prev:70.0},{label:"Sex",cur:69.0,prev:65.5},{label:"Sáb",cur:91.3,prev:80.0},{label:"Dom",cur:79.1,prev:74.2}
+    ]},
+    traffic: [ {label:"Busca Etsy", value:1080, color:"#f0498c"}, {label:"Etsy Ads", value:480, color:"#7c6fee"}, {label:"Google", value:360, color:"#3fa9f5"}, {label:"Redes sociais", value:160, color:"#ffb648"}, {label:"Direto", value:100, color:"#28c38f"} ],
+    products: [
+      {name:"Mega Bundle 200+ PNGs", visits:612, favorites:214, sales:22, revenue:131.00, trend:"up"},
+      {name:"Side Characters Bundle", visits:498, favorites:88, sales:25, revenue:108.00, trend:"up"},
+      {name:"Cruise SVG — Disney Wish", visits:445, favorites:97, sales:20, revenue:96.00, trend:"flat"},
+      {name:"Pennant Flag Set (30 un.)", visits:301, favorites:52, sales:9, revenue:52.30, trend:"up"},
+      {name:"Cabin Banner 2x6 Printable", visits:324, favorites:143, sales:4, revenue:22.10, trend:"down"}
+    ]
+  },
+  monthly: {
+    label: "Faturamento líquido — julho (parcial)",
+    range: "01 – 06 jul 2026",
+    tableRange: "Mês atual",
+    compareTitle: "Comparativo — este mês vs. mês anterior (mesmo período)",
+    stats: { gross: 621.40, net: 493.80, orders: 52, visits: 2540, avgTicket: 11.95, conv: 2.0, growthNet: 5, growthGross: 6, growthOrders: 4, growthVisits: -11 },
+    best: "Mega Bundle",
+    heroSeries: { current:[80,95,88,110,102,131,88], previous:[76,90,84,101,95,120,90], labels:["Sem 1","Sem 2","Sem 3","Sem 4","Sem 5","Sem 6","Sem 7"] },
+    compareSeries: { pairs:[
+      {label:"01",cur:61.4,prev:58.0},{label:"02",cur:74.2,prev:69.0},{label:"03",cur:58.9,prev:64.0},
+      {label:"04",cur:82.5,prev:75.0},{label:"05",cur:69.0,prev:71.0},{label:"06",cur:91.3,prev:82.0}
+    ]},
+    traffic: [ {label:"Busca Etsy", value:1260, color:"#f0498c"}, {label:"Etsy Ads", value:560, color:"#7c6fee"}, {label:"Google", value:420, color:"#3fa9f5"}, {label:"Redes sociais", value:190, color:"#ffb648"}, {label:"Direto", value:110, color:"#28c38f"} ],
+    products: [
+      {name:"Mega Bundle 200+ PNGs", visits:980, favorites:214, sales:41, revenue:245.00, trend:"up"},
+      {name:"Side Characters Bundle", visits:845, favorites:88, sales:38, revenue:198.00, trend:"up"},
+      {name:"Cruise SVG — Disney Wish", visits:710, favorites:97, sales:31, revenue:151.00, trend:"down"},
+      {name:"Pennant Flag Set (30 un.)", visits:412, favorites:52, sales:12, revenue:74.30, trend:"flat"},
+      {name:"Cabin Banner 2x6 Printable", visits:389, favorites:143, sales:6, revenue:34.10, trend:"down"}
+    ]
+  }
+};
+
+function brl(n){return "R$" + n.toFixed(2).replace(".", ",");}
+function pct(n){ const s = n>=0?"▲":"▼"; return `${s} ${Math.abs(n)}% vs. anterior`; }
+
+/* ------------------------------------------------------------------
+   Seletor de mês (ilustrativo): escala os dados de exemplo de julho
+   para simular meses diferentes. Na integração real, cada mês virá
+   com seus próprios dados vindos da API — isto some nessa hora.
+------------------------------------------------------------------- */
+const MONTH_FACTOR = { "2026-07": 1.0, "2026-06": 0.86, "2026-05": 0.72 };
+const SCALE_FIELDS = ["gross","net","orders","visits","favorites","revenue","sales"];
+
+function deepScale(obj, factor){
+  if (Array.isArray(obj)) return obj.map(v => typeof v === "number" ? Math.round(v*factor*100)/100 : deepScale(v, factor));
+  if (obj && typeof obj === "object"){
+    const out = {};
+    for (const k in obj){
+      if (typeof obj[k] === "number" && SCALE_FIELDS.includes(k)) out[k] = Math.round(obj[k]*factor*100)/100;
+      else out[k] = deepScale(obj[k], factor);
+    }
+    return out;
+  }
+  return obj;
+}
+
+function getPeriods(month){
+  const factor = MONTH_FACTOR[month] ?? 1;
+  return factor === 1 ? PERIODS : deepScale(PERIODS, factor);
+}
+
+let currentMonth = "2026-07";
+
+function render(periodKey){
+  const d = getPeriods(currentMonth)[periodKey];
+
+  document.getElementById('heroLabel').textContent = d.label;
+  document.getElementById('heroRange').textContent = d.range;
+  document.getElementById('heroValue').textContent = brl(d.stats.net);
+  document.getElementById('heroSub').textContent = `${d.stats.orders} pedidos · ticket médio ${brl(d.stats.avgTicket)}`;
+  document.getElementById('qsVisits').textContent = d.stats.visits.toLocaleString('pt-BR');
+  document.getElementById('qsConv').textContent = d.stats.conv.toString().replace('.',',') + '%';
+  document.getElementById('qsBest').textContent = d.best;
+  document.getElementById('qsGrowth').textContent = (d.stats.growthNet>=0?'+':'') + d.stats.growthNet + '%';
+
+  document.getElementById('sc-gross').textContent = brl(d.stats.gross);
+  document.getElementById('sc-net').textContent = brl(d.stats.net);
+  document.getElementById('sc-orders').textContent = d.stats.orders;
+  document.getElementById('sc-visits').textContent = d.stats.visits.toLocaleString('pt-BR');
+  document.getElementById('sc-gross-t').textContent = pct(d.stats.growthGross);
+  document.getElementById('sc-net-t').textContent = pct(d.stats.growthNet);
+  document.getElementById('sc-orders-t').textContent = pct(d.stats.growthOrders);
+  document.getElementById('sc-visits-t').textContent = pct(d.stats.growthVisits);
+
+  document.getElementById('compareTitle').textContent = d.compareTitle;
+  document.getElementById('tableRange').textContent = d.tableRange;
+
+  const tbody = document.getElementById('productRows');
+  tbody.innerHTML = "";
+  d.products.forEach(p=>{
+    const conv = p.visits>0 ? ((p.sales/p.visits)*100).toFixed(1).replace('.',',') : "0,0";
+    const badgeClass = p.trend==="up"?"up":p.trend==="down"?"down":"flat";
+    const badgeIcon = p.trend==="up"?"▲":p.trend==="down"?"▼":"—";
+    const badgeLabel = p.trend==="up"?"Em alta":p.trend==="down"?"Em queda":"Estável";
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="prod-name">${p.name}</td>
+      <td>${p.visits}</td>
+      <td>♡ ${p.favorites}</td>
+      <td>${p.sales}</td>
+      <td>${conv}%</td>
+      <td>${brl(p.revenue)}</td>
+      <td><span class="badge ${badgeClass}">${badgeIcon} ${badgeLabel}</span></td>`;
+    tbody.appendChild(tr);
+  });
+
+  drawHeroChart(d.heroSeries);
+  drawCompare(d.compareSeries.pairs);
+}
+
+function drawHeroChart(series){
+  const canvas = document.getElementById('heroChart');
+  const dpr = window.devicePixelRatio||1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width*dpr; canvas.height = 150*dpr;
+  canvas.style.width = rect.width+"px"; canvas.style.height="150px";
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  const W = rect.width, H = 150, padL=8, padR=8, padT=8, padB=20;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+  const all = series.current.concat(series.previous);
+  const maxV = Math.max(...all,1)*1.15;
+  ctx.clearRect(0,0,W,H);
+  const stepX = plotW/(series.current.length-1);
+
+  function drawLine(arr,color,fillGrad){
+    ctx.beginPath();
+    arr.forEach((v,i)=>{
+      const x=padL+stepX*i, y=padT+plotH-(v/maxV)*plotH;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle=color; ctx.lineWidth=2.4; ctx.stroke();
+    if(fillGrad){
+      ctx.lineTo(padL+stepX*(arr.length-1), padT+plotH);
+      ctx.lineTo(padL, padT+plotH); ctx.closePath();
+      const g = ctx.createLinearGradient(0,padT,0,padT+plotH);
+      g.addColorStop(0,fillGrad); g.addColorStop(1,"rgba(255,255,255,0)");
+      ctx.fillStyle=g; ctx.fill();
+    }
+  }
+  drawLine(series.previous,"#e3d9f0",null);
+  drawLine(series.current,"#f0498c","rgba(240,73,140,0.16)");
+
+  ctx.fillStyle="#8b859c"; ctx.font="10px Inter";
+  series.labels.forEach((l,i)=>{
+    if(series.labels.length>10 && i%3!==0) return;
+    ctx.fillText(l, padL+stepX*i-10, H-4);
+  });
+}
+
+function drawDonut(traffic){
+  const canvas = document.getElementById('donutChart');
+  const ctx = canvas.getContext('2d');
+  const total = traffic.reduce((s,t)=>s+t.value,0);
+  document.getElementById('donutTotal').textContent = total.toLocaleString('pt-BR');
+  ctx.clearRect(0,0,160,160);
+  let start = -Math.PI/2;
+  const cx=80, cy=80, rOuter=70, rInner=46;
+  traffic.forEach(t=>{
+    const angle = (t.value/total)*Math.PI*2;
+    ctx.beginPath();
+    ctx.arc(cx,cy,rOuter,start,start+angle);
+    ctx.arc(cx,cy,rInner,start+angle,start,true);
+    ctx.closePath();
+    ctx.fillStyle = t.color;
+    ctx.fill();
+    start += angle;
+  });
+  const legend = document.getElementById('donutLegend');
+  legend.innerHTML = "";
+  traffic.forEach(t=>{
+    const pctVal = ((t.value/total)*100).toFixed(0);
+    const item = document.createElement('div');
+    item.className = "legend-item";
+    item.innerHTML = `<span class="legend-dot" style="background:${t.color}"></span>${t.label} · ${pctVal}%`;
+    legend.appendChild(item);
+  });
+}
+
+function drawCompare(pairs){
+  const canvas = document.getElementById('compareChart');
+  const dpr = window.devicePixelRatio||1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width*dpr; canvas.height=180*dpr;
+  canvas.style.width=rect.width+"px"; canvas.style.height="180px";
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  const W=rect.width, H=180, padL=36, padR=8, padT=10, padB=24;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+  const maxV = Math.max(...pairs.map(p=>Math.max(p.cur,p.prev)))*1.2;
+  ctx.clearRect(0,0,W,H);
+
+  ctx.strokeStyle="#f1e6ee"; ctx.fillStyle="#8b859c"; ctx.font="10px Inter"; ctx.lineWidth=1;
+  for(let i=0;i<=3;i++){
+    const y = padT+plotH-(plotH*i/3);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+    ctx.fillText(Math.round(maxV*i/3), 2, y+3);
+  }
+
+  const groupW = plotW/pairs.length;
+  const barW = Math.min(26, groupW*0.32);
+  pairs.forEach((p,i)=>{
+    const gx = padL + groupW*i + groupW/2;
+    const hPrev = (p.prev/maxV)*plotH, hCur = (p.cur/maxV)*plotH;
+    ctx.fillStyle = "#e3d9f0";
+    ctx.fillRect(gx-barW-3, padT+plotH-hPrev, barW, hPrev);
+    ctx.fillStyle = "#f0498c";
+    ctx.fillRect(gx+3, padT+plotH-hCur, barW, hCur);
+    ctx.fillStyle = "#8b859c"; ctx.font="10.5px Inter";
+    ctx.textAlign = "center";
+    ctx.fillText(p.label, gx, H-6);
+  });
+  ctx.textAlign = "left";
+}
+
+document.getElementById('periodToggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  document.querySelectorAll('#periodToggle button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  render(btn.dataset.period);
+});
+
+document.getElementById('monthSelect').addEventListener('change', (e)=>{
+  currentMonth = e.target.value;
+  const active = document.querySelector('#periodToggle button.active').dataset.period;
+  render(active);
+});
+
+/* ------------------------------------------------------------------
+   Tenta ler o data.json real (gerado pelo coletor). Se não existir
+   ainda (ex.: antes da primeira execução do robô), continua usando
+   os dados de exemplo (PERIODS) normalmente — sem quebrar a tela.
+------------------------------------------------------------------- */
+async function tryLoadRealData(){
+  try {
+    const res = await fetch('data.json', { cache: "no-store" });
+    if (!res.ok) throw new Error("data.json ainda não existe");
+    const real = await res.json();
+
+    // Cadência de publicação (dado real, quando disponível)
+    if (real.cadence) {
+      const days = real.cadence.days_since_last;
+      document.getElementById('cadenceDays').textContent = days ?? "—";
+      document.getElementById('cadenceActive').textContent = real.cadence.active_count ?? "—";
+      document.getElementById('cadenceNew30').textContent = real.cadence.created_last_30d ?? "—";
+      const statusEl = document.getElementById('cadenceStatus');
+      if (days === null || days === undefined) {
+        statusEl.className = "cadence-status warn";
+        statusEl.textContent = "Sem dados de cadência ainda";
+      } else if (days > 21) {
+        statusEl.className = "cadence-status bad";
+        statusEl.textContent = "⚠ Risco alto — publique um anúncio esta semana";
+      } else if (days > 10) {
+        statusEl.className = "cadence-status warn";
+        statusEl.textContent = "Atenção — cadência caindo";
+      } else {
+        statusEl.className = "cadence-status ok";
+        statusEl.textContent = "✓ Cadência saudável";
+      }
+    }
+
+    document.getElementById('statusText') && (document.getElementById('statusText').textContent =
+      "Dados reais conectados · última leitura: " + new Date(real.last_updated).toLocaleTimeString('pt-BR'));
+
+    console.log("data.json carregado com sucesso — dados reais em uso.");
+    // OBS: a integração completa dos cards/gráficos com o "today" real do
+    // data.json entra aqui na próxima etapa, assim que o coletor estiver
+    // rodando de verdade e pudermos validar o formato final dos dados.
+  } catch (e) {
+    console.log("Usando dados de exemplo (data.json não encontrado ainda).");
+  }
+}
+
+render('daily');
+tryLoadRealData();
+window.addEventListener('resize', ()=>{
+  const active = document.querySelector('#periodToggle button.active').dataset.period;
+  render(active);
+});
+</script>
+</body>
+</html>
