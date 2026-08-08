@@ -533,12 +533,14 @@ document.getElementById('periodToggle').addEventListener('click', (e)=>{
   document.querySelectorAll('#periodToggle button').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   render(btn.dataset.period);
+  if (REAL) applyRealData(REAL);  // reaplica dados reais por cima do exemplo
 });
 
 document.getElementById('monthSelect').addEventListener('change', (e)=>{
   currentMonth = e.target.value;
   const active = document.querySelector('#periodToggle button.active').dataset.period;
   render(active);
+  if (REAL) applyRealData(REAL);
 });
 
 /* ------------------------------------------------------------------
@@ -546,43 +548,103 @@ document.getElementById('monthSelect').addEventListener('change', (e)=>{
    ainda (ex.: antes da primeira execução do robô), continua usando
    os dados de exemplo (PERIODS) normalmente — sem quebrar a tela.
 ------------------------------------------------------------------- */
+let REAL = null; // guarda os dados reais quando carregados
+
 async function tryLoadRealData(){
   try {
     const res = await fetch('data.json', { cache: "no-store" });
     if (!res.ok) throw new Error("data.json ainda não existe");
-    const real = await res.json();
-
-    // Cadência de publicação (dado real, quando disponível)
-    if (real.cadence) {
-      const days = real.cadence.days_since_last;
-      document.getElementById('cadenceDays').textContent = days ?? "—";
-      document.getElementById('cadenceActive').textContent = real.cadence.active_count ?? "—";
-      document.getElementById('cadenceNew30').textContent = real.cadence.created_last_30d ?? "—";
-      const statusEl = document.getElementById('cadenceStatus');
-      if (days === null || days === undefined) {
-        statusEl.className = "cadence-status warn";
-        statusEl.textContent = "Sem dados de cadência ainda";
-      } else if (days > 21) {
-        statusEl.className = "cadence-status bad";
-        statusEl.textContent = "⚠ Risco alto — publique um anúncio esta semana";
-      } else if (days > 10) {
-        statusEl.className = "cadence-status warn";
-        statusEl.textContent = "Atenção — cadência caindo";
-      } else {
-        statusEl.className = "cadence-status ok";
-        statusEl.textContent = "✓ Cadência saudável";
-      }
-    }
-
-    document.getElementById('statusText') && (document.getElementById('statusText').textContent =
-      "Dados reais conectados · última leitura: " + new Date(real.last_updated).toLocaleTimeString('pt-BR'));
-
-    console.log("data.json carregado com sucesso — dados reais em uso.");
-    // OBS: a integração completa dos cards/gráficos com o "today" real do
-    // data.json entra aqui na próxima etapa, assim que o coletor estiver
-    // rodando de verdade e pudermos validar o formato final dos dados.
+    REAL = await res.json();
+    applyRealData(REAL);
+    console.log("data.json carregado — dados reais em uso.");
   } catch (e) {
-    console.log("Usando dados de exemplo (data.json não encontrado ainda).");
+    console.log("Usando dados de exemplo (data.json não encontrado ainda).", e);
+  }
+}
+
+function applyRealData(real){
+  const t = real.today || {};
+
+  // --- Cards principais (dados reais de HOJE) ---
+  document.getElementById('sc-gross').textContent = brl(t.gross || 0);
+  document.getElementById('sc-net').textContent = brl(t.net || 0);
+  document.getElementById('sc-orders').textContent = t.orders ?? 0;
+
+  // Visitas: soma das aproximações por produto
+  const totalVisits = (real.products || []).reduce((s,p)=> s + (p.visits||0), 0);
+  document.getElementById('sc-visits').textContent = totalVisits.toLocaleString('pt-BR');
+
+  // Como ainda não temos base de comparação histórica real, escondemos os "% vs anterior"
+  ['sc-gross-t','sc-net-t','sc-orders-t','sc-visits-t'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.textContent = "hoje";
+  });
+
+  // --- Bloco de destaque ---
+  document.getElementById('heroLabel').textContent = "Faturamento líquido — hoje";
+  document.getElementById('heroValue').textContent = brl(t.net || 0);
+  document.getElementById('heroSub').textContent =
+    `${t.orders ?? 0} pedidos · ticket médio ${brl(t.avg_ticket || 0)}`;
+  const bestProd = (real.products || []).slice().sort((a,b)=>(b.favorites||0)-(a.favorites||0))[0];
+  document.getElementById('qsBest').textContent = bestProd ? bestProd.name.slice(0,22) + "…" : "—";
+  document.getElementById('qsVisits').textContent = totalVisits.toLocaleString('pt-BR');
+  document.getElementById('qsConv').textContent = "—";
+  document.getElementById('qsGrowth').textContent = "—";
+
+  // --- Cadência de publicação (real) ---
+  if (real.cadence) {
+    const days = real.cadence.days_since_last;
+    document.getElementById('cadenceDays').textContent = days ?? "—";
+    document.getElementById('cadenceActive').textContent = real.cadence.active_count ?? "—";
+    document.getElementById('cadenceNew30').textContent = real.cadence.created_last_30d ?? "—";
+    const statusEl = document.getElementById('cadenceStatus');
+    if (days === null || days === undefined) {
+      statusEl.className = "cadence-status warn";
+      statusEl.textContent = "Sem dados de cadência ainda";
+    } else if (days > 21) {
+      statusEl.className = "cadence-status bad";
+      statusEl.textContent = "⚠ Risco alto — publique um anúncio esta semana";
+    } else if (days > 10) {
+      statusEl.className = "cadence-status warn";
+      statusEl.textContent = "Atenção — cadência caindo";
+    } else {
+      statusEl.className = "cadence-status ok";
+      statusEl.textContent = "✓ Cadência saudável";
+    }
+  }
+
+  // --- Tabela de produtos (real) — ordenada por favoritos ---
+  const tbody = document.getElementById('productRows');
+  tbody.innerHTML = "";
+  const prods = (real.products || []).slice().sort((a,b)=>(b.favorites||0)-(a.favorites||0));
+  prods.forEach(p=>{
+    const conv = p.visits>0 ? ((0/p.visits)*100).toFixed(1).replace('.',',') : "—";
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="prod-name" title="${p.name.replace(/"/g,'&quot;')}">${p.name.length>52 ? p.name.slice(0,52)+"…" : p.name}</td>
+      <td>${p.visits ?? 0}</td>
+      <td>♡ ${p.favorites ?? 0}</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td><span class="badge flat">— acompanhando</span></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('tableRange').textContent = `${prods.length} anúncios ativos`;
+
+  // --- Barra de status no topo ---
+  const st = document.getElementById('statusText');
+  if (st) {
+    st.textContent = "Dados reais · última leitura: " +
+      new Date(real.last_updated).toLocaleString('pt-BR');
+  }
+
+  // --- Nota de rodapé honesta ---
+  const foot = document.querySelector('.foot-note');
+  if (foot) {
+    foot.innerHTML =
+      '<span>Fonte: <b>dados reais da API da Etsy</b> · vendas e favoritos são reais</span>' +
+      '<span>Visitas e comparativos por período ficam disponíveis conforme o histórico é acumulado nas próximas coletas</span>';
   }
 }
 
