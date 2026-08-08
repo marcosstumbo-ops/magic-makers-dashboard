@@ -34,7 +34,7 @@ def refresh_access_token():
 
 def api_get(path, token, params=None):
     headers = {
-        "x-api-key": API_KEY,
+        "x-api-key": f"{API_KEY}:{SHARED_SECRET}",
         "Authorization": f"Bearer {token}",
     }
     resp = requests.get(f"{API_BASE}{path}", headers=headers, params=params or {})
