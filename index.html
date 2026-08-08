@@ -190,7 +190,8 @@
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <select id="monthSelect" class="month-select">
-          <option value="2026-07" selected>Julho 2026</option>
+          <option value="2026-08" selected>Agosto 2026</option>
+          <option value="2026-07">Julho 2026</option>
           <option value="2026-06">Junho 2026</option>
           <option value="2026-05">Maio 2026</option>
         </select>
@@ -354,7 +355,7 @@ function pct(n){ const s = n>=0?"▲":"▼"; return `${s} ${Math.abs(n)}% vs. an
    para simular meses diferentes. Na integração real, cada mês virá
    com seus próprios dados vindos da API — isto some nessa hora.
 ------------------------------------------------------------------- */
-const MONTH_FACTOR = { "2026-07": 1.0, "2026-06": 0.86, "2026-05": 0.72 };
+const MONTH_FACTOR = { "2026-08": 1.05, "2026-07": 1.0, "2026-06": 0.86, "2026-05": 0.72 };
 const SCALE_FIELDS = ["gross","net","orders","visits","favorites","revenue","sales"];
 
 function deepScale(obj, factor){
@@ -375,7 +376,7 @@ function getPeriods(month){
   return factor === 1 ? PERIODS : deepScale(PERIODS, factor);
 }
 
-let currentMonth = "2026-07";
+let currentMonth = "2026-08";
 
 function render(periodKey){
   const d = getPeriods(currentMonth)[periodKey];
@@ -633,10 +634,9 @@ function applyRealData(real){
   document.getElementById('tableRange').textContent = `${prods.length} anúncios ativos`;
 
   // --- Barra de status no topo ---
-  const st = document.getElementById('statusText');
+  const st = document.getElementById('updTime');
   if (st) {
-    st.textContent = "Dados reais · última leitura: " +
-      new Date(real.last_updated).toLocaleString('pt-BR');
+    st.textContent = new Date(real.last_updated).toLocaleString('pt-BR');
   }
 
   // --- Nota de rodapé honesta ---
@@ -646,14 +646,13 @@ function applyRealData(real){
       '<span>Fonte: <b>dados reais da API da Etsy</b> · vendas e favoritos são reais</span>' +
       '<span>Visitas e comparativos por período ficam disponíveis conforme o histórico é acumulado nas próximas coletas</span>';
   }
+
+  console.log("applyRealData concluído — cards atualizados com:", t.gross, t.net, t.orders);
 }
 
 render('daily');
 tryLoadRealData();
-window.addEventListener('resize', ()=>{
-  const active = document.querySelector('#periodToggle button.active').dataset.period;
-  render(active);
-});
+// nota: removido o repaint no 'resize' que sobrescrevia os dados reais
 </script>
 </body>
 </html>
