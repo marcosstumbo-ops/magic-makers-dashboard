@@ -1,0 +1,54 @@
+name: "Etsy — Teste de diagnóstico"
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  teste:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar requests
+        run: pip install requests
+      - name: Testar acesso
+        env:
+          ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
+          ETSY_REFRESH_TOKEN: ${{ secrets.ETSY_REFRESH_TOKEN }}
+        run: |
+          python3 - << 'EOF'
+          import os, requests
+
+          api_key = os.environ["ETSY_API_KEY"]
+          refresh = os.environ["ETSY_REFRESH_TOKEN"]
+
+          # 1. Renova o token
+          r = requests.post("https://api.etsy.com/v3/public/oauth/token", data={
+              "grant_type": "refresh_token",
+              "client_id": api_key,
+              "refresh_token": refresh,
+          })
+          print("=== Renovacao do token ===")
+          print("status:", r.status_code)
+          if r.status_code != 200:
+              print(r.text)
+              raise SystemExit(1)
+
+          tok = r.json()
+          token = tok["access_token"]
+          print("scopes concedidos:", tok.get("scope", "(nao informado)"))
+          user_id = token.split(".")[0]
+          print("user_id:", user_id)
+
+          headers = {"x-api-key": api_key, "Authorization": f"Bearer {token}"}
+
+          # 2. Testa /users/me
+          print("\n=== /users/me ===")
+          r2 = requests.get("https://api.etsy.com/v3/application/users/me", headers=headers)
+          print("status:", r2.status_code)
+          print(r2.text[:500])
+
+          # 3. Testa /users/{id}/shops
+          print("\n=== /users/{id}/shops ===")
+          r3 = requests.get(f"https://api.etsy.com/v3/application/users/{user_id}/shops", headers=headers)
+          print("status:", r3.status_code)
+          print(r3.text[:500])
+          EOF
