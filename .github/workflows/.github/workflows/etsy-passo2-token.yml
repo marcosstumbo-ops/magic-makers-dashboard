@@ -1,0 +1,65 @@
+name: "Etsy — Passo 2: Trocar código pelo token"
+
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: "O código que apareceu na página de callback"
+        required: true
+      verifier:
+        description: "O VERIFIER que apareceu no Passo 1"
+        required: true
+
+jobs:
+  trocar-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar requests
+        run: pip install requests
+
+      - name: Trocar código pelo refresh token
+        env:
+          ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
+          INPUT_CODE: ${{ github.event.inputs.code }}
+          INPUT_VERIFIER: ${{ github.event.inputs.verifier }}
+        run: |
+          python3 - << 'EOF'
+          import os, requests
+
+          api_key = os.environ["ETSY_API_KEY"]
+          code = os.environ["INPUT_CODE"].strip()
+          verifier = os.environ["INPUT_VERIFIER"].strip()
+          redirect_uri = "https://dashboard-etsy.netlify.app/oauth/callback"
+
+          resp = requests.post(
+              "https://api.etsy.com/v3/public/oauth/token",
+              data={
+                  "grant_type": "authorization_code",
+                  "client_id": api_key,
+                  "redirect_uri": redirect_uri,
+                  "code": code,
+                  "code_verifier": verifier,
+              },
+          )
+
+          if resp.status_code != 200:
+              print("ERRO ao trocar o codigo:")
+              print(resp.status_code, resp.text)
+              raise SystemExit(1)
+
+          data = resp.json()
+          refresh_token = data["refresh_token"]
+          user_id = data["access_token"].split(".")[0]
+
+          print("")
+          print("=" * 72)
+          print("SUCESSO! Copie o valor abaixo — este e o ETSY_REFRESH_TOKEN")
+          print("=" * 72)
+          print(refresh_token)
+          print("")
+          print("=" * 72)
+          print("ETSY_SHOP_ID (user_id da conta):")
+          print("=" * 72)
+          print(user_id)
+          print("")
+          EOF
