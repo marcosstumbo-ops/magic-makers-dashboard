@@ -1,0 +1,47 @@
+name: "Etsy — Passo 1: Gerar link de autorização"
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  gerar-link:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gerar link e verifier
+        env:
+          ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
+        run: |
+          python3 - << 'EOF'
+          import secrets, hashlib, base64, os
+
+          api_key = os.environ["ETSY_API_KEY"]
+          redirect_uri = "https://dashboard-etsy.netlify.app/oauth/callback"
+          scopes = "transactions_r listings_r shops_r"
+
+          verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+          challenge = base64.urlsafe_b64encode(
+              hashlib.sha256(verifier.encode()).digest()
+          ).rstrip(b"=").decode()
+          state = secrets.token_hex(8)
+
+          scope_url = scopes.replace(" ", "%20")
+          link = (
+              "https://www.etsy.com/oauth/connect"
+              f"?response_type=code&client_id={api_key}"
+              f"&redirect_uri={redirect_uri}"
+              f"&scope={scope_url}&state={state}"
+              f"&code_challenge={challenge}&code_challenge_method=S256"
+          )
+
+          print("")
+          print("=" * 72)
+          print("LINK DE AUTORIZACAO (mande para seu irmao abrir e autorizar):")
+          print("=" * 72)
+          print(link)
+          print("")
+          print("=" * 72)
+          print("VERIFIER (GUARDE ESTE VALOR — voce vai precisar no Passo 2):")
+          print("=" * 72)
+          print(verifier)
+          print("")
+          EOF
