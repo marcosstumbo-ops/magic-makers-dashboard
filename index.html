@@ -201,6 +201,16 @@ let H = null;          // histórico carregado
 let CUR = "US$";       // moeda
 let selectedMonth = null; // "2026-08"
 
+// Fuso da LOJA na Etsy (mesmo valor do coletor). 0 = UTC.
+// Ajustar junto com SHOP_TZ_OFFSET do collector.py quando confirmarmos.
+const SHOP_TZ_OFFSET = 0; // em horas
+
+function shopNow(){
+  // "agora" no fuso da loja: pega o UTC e aplica o offset da loja
+  const utcMs = Date.now();
+  return new Date(utcMs + SHOP_TZ_OFFSET*3600*1000);
+}
+
 function money(n){
   return CUR + " " + (n||0).toFixed(2).replace(".", ",");
 }
@@ -208,21 +218,29 @@ function pctDelta(cur, prev){
   if (!prev) return null;
   return ((cur - prev) / prev) * 100;
 }
-function fmtDelta(d){
+function fmtDelta(d, label){
   if (d === null || !isFinite(d)) return "";
   const arrow = d >= 0 ? "▲" : "▼";
-  return `${arrow} ${Math.abs(d).toFixed(0)}% vs. mês anterior`;
+  return `${arrow} ${Math.abs(d).toFixed(0)}% ${label || "vs. mês anterior"}`;
 }
 
 function monthKey(dateStr){ return dateStr.slice(0,7); }
 function todayKey(){
-  const now = new Date();
-  // horário de Brasília aproximado pelo relógio local do visitante
-  return now.toISOString().slice(0,10);
+  // data de hoje no fuso da loja (alinha com o agrupamento do coletor)
+  return shopNow().toISOString().slice(0,10);
 }
 
-function monthTotals(mkey){
-  const days = Object.entries(H.daily).filter(([d]) => d.startsWith(mkey));
+function monthTotals(mkey, dayLimit){
+  // dayLimit: se informado, soma apenas os dias 1..dayLimit do mês
+  // (usado para comparar períodos equivalentes entre meses)
+  const days = Object.entries(H.daily).filter(([d]) => {
+    if (!d.startsWith(mkey)) return false;
+    if (dayLimit){
+      const dayNum = parseInt(d.slice(8,10), 10);
+      return dayNum <= dayLimit;
+    }
+    return true;
+  });
   const t = { gross:0, net:0, orders:0, daysWithData:0 };
   days.forEach(([d,v])=>{
     t.gross += v.gross||0; t.net += v.net||0; t.orders += v.orders||0;
@@ -244,15 +262,31 @@ function render(){
   const isCurrentMonth = nowKey.startsWith(mkey);
 
   // --- Cards do mês ---
+  const nowDay = parseInt(nowKey.slice(8,10), 10);
+  // Se for o mês corrente, compara período equivalente (1..hoje) com o mês anterior (1..hoje).
+  // Se for mês passado (fechado), compara o mês inteiro com o anterior inteiro.
   const t = monthTotals(mkey);
-  const p = monthTotals(prevMonthKey(mkey));
+  let p, cmpLabel;
+  if (isCurrentMonth){
+    const tEquiv = monthTotals(mkey, nowDay);
+    const pEquiv = monthTotals(prevMonthKey(mkey), nowDay);
+    // mostra o total do mês nos cards, mas compara período equivalente
+    p = pEquiv;
+    window.__tEquiv = tEquiv; // guarda p/ o delta usar o equivalente
+    cmpLabel = `vs. mesmos ${nowDay} dias do mês anterior`;
+  } else {
+    p = monthTotals(prevMonthKey(mkey));
+    window.__tEquiv = null;
+    cmpLabel = "vs. mês anterior";
+  }
+  const tForCompare = window.__tEquiv || t;
   document.getElementById('sc-gross').textContent = money(t.gross);
   document.getElementById('sc-net').textContent = money(t.net);
   document.getElementById('sc-orders').textContent = t.orders;
   document.getElementById('sc-ticket').textContent = t.orders ? money(t.gross/t.orders) : "—";
-  document.getElementById('sc-gross-t').textContent = fmtDelta(pctDelta(t.gross, p.gross));
-  document.getElementById('sc-net-t').textContent = fmtDelta(pctDelta(t.net, p.net));
-  document.getElementById('sc-orders-t').textContent = fmtDelta(pctDelta(t.orders, p.orders));
+  document.getElementById('sc-gross-t').textContent = fmtDelta(pctDelta(tForCompare.gross, p.gross), cmpLabel);
+  document.getElementById('sc-net-t').textContent = fmtDelta(pctDelta(tForCompare.net, p.net), cmpLabel);
+  document.getElementById('sc-orders-t').textContent = fmtDelta(pctDelta(tForCompare.orders, p.orders), cmpLabel);
   document.getElementById('sc-ticket-t').textContent = "";
   document.getElementById('lbl-gross').textContent = `Faturamento bruto — ${monthName}`;
   document.getElementById('lbl-net').textContent = `Líquido (pós-taxas) — ${monthName}`;
@@ -262,7 +296,7 @@ function render(){
   if (isCurrentMonth){
     todayPanel.style.display = "";
     const today = H.daily[nowKey] || {gross:0,net:0,orders:0};
-    const yk = new Date(); yk.setDate(yk.getDate()-1);
+    const yk = shopNow(); yk.setUTCDate(yk.getUTCDate()-1);
     const ykey = yk.toISOString().slice(0,10);
     const yday = H.daily[ykey] || {gross:0,net:0,orders:0};
     document.getElementById('todayNet').textContent = money(today.net);
