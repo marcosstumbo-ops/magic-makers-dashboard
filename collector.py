@@ -33,7 +33,15 @@ SHARED_SECRET = os.environ.get("ETSY_SHARED_SECRET", "")
 REFRESH_TOKEN = os.environ["ETSY_REFRESH_TOKEN"]
 
 HIST_FILE = "historico.json"
-TZ_BR = timezone(timedelta(hours=-3))
+
+# Fuso da LOJA na Etsy. A Etsy agrupa "vendas do dia" pelo fuso configurado
+# na conta. Deixamos aqui num único lugar para ajustar quando confirmarmos.
+# UTC (offset 0) costuma alinhar bem com o painel; se a loja usar horário
+# dos EUA, trocar para -5 (Eastern) ou -8 (Pacific), por exemplo.
+SHOP_TZ_OFFSET = 0  # em horas; 0 = UTC
+TZ_SHOP = timezone(timedelta(hours=SHOP_TZ_OFFSET))
+
+TZ_BR = timezone(timedelta(hours=-3))  # usado só para o carimbo "gerado em"
 
 SHOP_ID = ""
 
@@ -127,7 +135,8 @@ def fetch_listings(token):
 
 # ------------------------- agregação -------------------------
 def day_key(ts):
-    return datetime.fromtimestamp(ts, tz=TZ_BR).strftime("%Y-%m-%d")
+    # Agrupa pelo fuso da LOJA (alinha com o painel da Etsy).
+    return datetime.fromtimestamp(ts, tz=TZ_SHOP).strftime("%Y-%m-%d")
 
 
 def receipt_amount(r):
@@ -199,7 +208,7 @@ def build_products(listings, transactions):
         ts = t.get("paid_timestamp") or t.get("created_timestamp") or t.get("create_timestamp")
         if not ts:
             continue
-        mk = datetime.fromtimestamp(ts, tz=TZ_BR).strftime("%Y-%m")
+        mk = datetime.fromtimestamp(ts, tz=TZ_SHOP).strftime("%Y-%m")
         price_obj = t.get("price") or {}
         price = (price_obj.get("amount", 0) or 0) / max(price_obj.get("divisor", 100) or 100, 1)
         qty = t.get("quantity", 1) or 1
@@ -215,7 +224,13 @@ def compute_cadence(listings):
     active = [l for l in listings if l.get("state") == "active"]
     dates = []
     for l in active:
-        ts = l.get("created_timestamp") or l.get("creation_timestamp")
+        # IMPORTANTE: usar a criação ORIGINAL, não created_timestamp —
+        # este último muda toda vez que o anúncio é renovado (a cada 4 meses),
+        # o que faria todos os produtos parecerem "criados hoje".
+        ts = (l.get("original_created_timestamp")
+              or l.get("original_creation_tsz")
+              or l.get("created_timestamp")
+              or l.get("creation_timestamp"))
         if ts:
             dates.append(datetime.fromtimestamp(ts, tz=timezone.utc))
     if not dates:
@@ -250,11 +265,12 @@ def main():
     if full_load:
         since = None  # tudo, desde sempre
     else:
-        cutoff = datetime.now(TZ_BR) - timedelta(days=7)
+        # janela dos últimos 8 dias, no fuso da loja (alinhado com day_key)
+        cutoff = datetime.now(TZ_SHOP) - timedelta(days=8)
         since = int(cutoff.timestamp())
-        # zera os últimos 7 dias para recalcular do zero (evita duplicar)
-        for i in range(8):
-            dk = (datetime.now(TZ_BR) - timedelta(days=i)).strftime("%Y-%m-%d")
+        # zera os últimos 8 dias para recalcular do zero (evita duplicar)
+        for i in range(9):
+            dk = (datetime.now(TZ_SHOP) - timedelta(days=i)).strftime("%Y-%m-%d")
             daily.pop(dk, None)
 
     receipts = fetch_receipts(token, since)
