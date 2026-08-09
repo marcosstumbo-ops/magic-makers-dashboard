@@ -1,11 +1,10 @@
 name: Coletar dados da Etsy
 
 on:
-  # 08:00-23:55 BRT = 11:00-02:55 UTC (dois trechos por causa da virada do dia em UTC)
   schedule:
-    - cron: "*/5 11-23 * * *"   # 08:00 às 20:55 BRT
-    - cron: "*/5 0-2 * * *"     # 21:00 às 23:55 BRT (madrugada em UTC)
-  workflow_dispatch: {}  # permite rodar manualmente pelo GitHub, se precisar testar
+    - cron: "*/10 11-23 * * *"   # 08:00 às 20:55 BRT (a cada 10 min)
+    - cron: "*/10 0-2 * * *"     # 21:00 às 23:55 BRT
+  workflow_dispatch: {}
 
 jobs:
   collect:
@@ -30,10 +29,11 @@ jobs:
           ETSY_SHOP_ID: ${{ secrets.ETSY_SHOP_ID }}
         run: python collector.py
 
-      - name: Salvar data.json e state.json no repositório
+      - name: Salvar histórico no repositório
         run: |
           git config user.name "coletor-etsy"
           git config user.email "coletor@magicmakers.local"
-          git add data.json state.json
-          git diff --quiet --cached || git commit -m "Atualiza dados da loja"
+          git add historico.json
+          git add data.json state.json 2>/dev/null || true
+          git diff --quiet --cached || git commit -m "Atualiza histórico da loja"
           git push
