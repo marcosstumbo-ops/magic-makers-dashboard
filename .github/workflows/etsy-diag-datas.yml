@@ -1,0 +1,68 @@
+name: "Etsy — Diagnóstico de datas"
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar requests
+        run: pip install requests
+      - name: Inspecionar datas
+        env:
+          ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
+          ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET }}
+          ETSY_REFRESH_TOKEN: ${{ secrets.ETSY_REFRESH_TOKEN }}
+        run: |
+          python3 - << 'EOF'
+          import os, requests
+          from datetime import datetime, timezone, timedelta
+
+          API_KEY = os.environ["ETSY_API_KEY"]
+          SECRET = os.environ["ETSY_SHARED_SECRET"]
+          REFRESH = os.environ["ETSY_REFRESH_TOKEN"]
+          BASE = "https://api.etsy.com/v3/application"
+
+          tok = requests.post("https://api.etsy.com/v3/public/oauth/token", data={
+              "grant_type":"refresh_token","client_id":API_KEY,"refresh_token":REFRESH
+          }).json()["access_token"]
+          H = {"x-api-key": f"{API_KEY}:{SECRET}", "Authorization": f"Bearer {tok}"}
+          uid = tok.split(".")[0]
+          shops = requests.get(f"{BASE}/users/{uid}/shops", headers=H).json()
+          shop_id = shops.get("shop_id") or shops["results"][0]["shop_id"]
+          print("SHOP_ID:", shop_id)
+
+          print("\n===== ULTIMOS PEDIDOS (para conferir o fuso) =====")
+          r = requests.get(f"{BASE}/shops/{shop_id}/receipts",
+                           headers=H, params={"limit":10}).json()
+          receipts = r.get("results", [])
+          for rc in receipts[-8:]:
+              ts = rc.get("created_timestamp") or rc.get("create_timestamp")
+              if not ts:
+                  print("  (pedido sem timestamp)"); continue
+              utc = datetime.fromtimestamp(ts, tz=timezone.utc)
+              br  = datetime.fromtimestamp(ts, tz=timezone(timedelta(hours=-3)))
+              et  = datetime.fromtimestamp(ts, tz=timezone(timedelta(hours=-4)))
+              et5 = datetime.fromtimestamp(ts, tz=timezone(timedelta(hours=-5)))
+              pt  = datetime.fromtimestamp(ts, tz=timezone(timedelta(hours=-8)))
+              print(f"  pedido {rc.get('receipt_id')}: "
+                    f"UTC={utc:%b %d %H:%M} | BR={br:%b %d %H:%M} | "
+                    f"ET-4={et:%b %d %H:%M} | ET-5={et5:%b %d %H:%M} | PT-8={pt:%b %d %H:%M}")
+
+          print("\nTotal de pedidos (count):", r.get("count"))
+
+          print("\n===== CAMPOS DE DATA DE UM ANUNCIO ATIVO =====")
+          lst = requests.get(f"{BASE}/shops/{shop_id}/listings",
+                             headers=H, params={"state":"active","limit":3}).json()
+          for l in lst.get("results", [])[:3]:
+              print(f"\n  Anuncio {l.get('listing_id')} — {str(l.get('title'))[:40]}")
+              for k in l.keys():
+                  if "timestamp" in k or "tsz" in k or "date" in k.lower():
+                      v = l[k]
+                      try:
+                          human = datetime.fromtimestamp(v, tz=timezone.utc).strftime("%Y-%m-%d")
+                      except Exception:
+                          human = "?"
+                      print(f"      {k} = {v}  ({human})")
+          EOF
