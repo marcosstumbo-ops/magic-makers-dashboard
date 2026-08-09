@@ -1,5 +1,22 @@
 """
-Coletor de dados da Etsy — Magic Makers Arts
+Coletor v2 — Magic Makers Arts
+================================
+Gera `historico.json` com o histórico completo de vendas da loja.
+
+COMO FUNCIONA:
+  - PRIMEIRA execução (historico.json não existe): busca TODOS os pedidos
+    e transações desde a criação da loja (carga histórica completa).
+  - Execuções seguintes: busca só os últimos 7 dias e mescla no histórico
+    (rápido e econômico com o limite de requisições da Etsy).
+
+SAÍDA (historico.json):
+  {
+    generated_at, currency, shop_id,
+    daily:    { "2026-08-08": {gross, net, fees, orders}, ... },
+    cadence:  { days_since_last, active_count, created_last_30d },
+    products: { listing_id: { name, favorites,
+                monthly: { "2026-08": {sales, revenue} } } }
+  }
 """
 
 import os
@@ -14,14 +31,14 @@ TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token"
 API_KEY = os.environ["ETSY_API_KEY"]
 SHARED_SECRET = os.environ.get("ETSY_SHARED_SECRET", "")
 REFRESH_TOKEN = os.environ["ETSY_REFRESH_TOKEN"]
-SHOP_ID = os.environ.get("ETSY_SHOP_ID", "")
 
-STATE_FILE = "state.json"
-OUTPUT_FILE = "data.json"
-
+HIST_FILE = "historico.json"
 TZ_BR = timezone(timedelta(hours=-3))
 
+SHOP_ID = ""
 
+
+# ------------------------- infra -------------------------
 def refresh_access_token():
     resp = requests.post(TOKEN_URL, data={
         "grant_type": "refresh_token",
@@ -47,159 +64,231 @@ def get_shop_id(token):
     data = api_get(f"/users/{user_id}/shops", token)
     if isinstance(data, dict) and "shop_id" in data:
         return str(data["shop_id"])
-    if isinstance(data, dict) and "results" in data and data["results"]:
+    if isinstance(data, dict) and data.get("results"):
         return str(data["results"][0]["shop_id"])
-    raise RuntimeError(f"Não consegui descobrir o shop_id. Resposta da API: {data}")
+    raise RuntimeError(f"Shop_id não encontrado: {data}")
 
 
-def fetch_receipts(token, since_ts):
-    results, offset = [], 0
-    while True:
-        data = api_get(f"/shops/{SHOP_ID}/receipts", token, {
-            "min_created": since_ts,
-            "limit": 100,
-            "offset": offset,
-        })
-        results.extend(data.get("results", []))
-        if len(data.get("results", [])) < 100:
+def paged(path, token, extra_params=None, page_limit=100, max_pages=200):
+    """Percorre um endpoint paginado até o fim (ou max_pages)."""
+    results, offset, pages = [], 0, 0
+    while pages < max_pages:
+        params = {"limit": page_limit, "offset": offset}
+        if extra_params:
+            params.update(extra_params)
+        data = api_get(path, token, params)
+        batch = data.get("results", [])
+        results.extend(batch)
+        pages += 1
+        if len(batch) < page_limit:
             break
-        offset += 100
+        offset += page_limit
+        time.sleep(0.15)  # gentileza com o rate limit
     return results
 
 
-def fetch_ledger_entries(token, since_ts):
-    results, offset = [], 0
+# ------------------------- coleta -------------------------
+def fetch_receipts(token, since_ts=None):
+    extra = {}
+    if since_ts:
+        extra["min_created"] = since_ts
+    return paged(f"/shops/{SHOP_ID}/receipts", token, extra)
+
+
+def fetch_transactions(token):
+    """Todas as transações (itens vendidos) da loja — para o breakdown por produto."""
     try:
-        while True:
-            data = api_get(f"/shops/{SHOP_ID}/payment-account/ledger-entries", token, {
-                "min_created": since_ts,
-                "limit": 100,
-                "offset": offset,
-            })
-            results.extend(data.get("results", []))
-            if len(data.get("results", [])) < 100:
-                break
-            offset += 100
+        return paged(f"/shops/{SHOP_ID}/transactions", token)
     except Exception as e:
-        print(f"AVISO: não consegui ler o ledger ({e}). Seguindo sem as taxas por enquanto.")
+        print(f"AVISO: transações indisponíveis ({e}). Produtos ficarão sem breakdown de vendas.")
         return []
-    return results
 
 
-def fetch_all_listings(token, state_filter="active"):
-    results, offset = [], 0
-    while True:
-        data = api_get(f"/shops/{SHOP_ID}/listings", token, {
-            "state": state_filter,
-            "limit": 100,
-            "offset": offset,
-        })
-        results.extend(data.get("results", []))
-        if len(data.get("results", [])) < 100:
-            break
-        offset += 100
-    return results
+def fetch_ledger(token, since_ts=None):
+    try:
+        extra = {}
+        if since_ts:
+            extra["min_created"] = since_ts
+        return paged(f"/shops/{SHOP_ID}/payment-account/ledger-entries", token, extra)
+    except Exception as e:
+        print(f"AVISO: ledger indisponível ({e}). Líquido = bruto por enquanto.")
+        return []
+
+
+def fetch_listings(token):
+    all_listings = []
+    for state in ("active", "sold_out", "expired", "inactive"):
+        try:
+            all_listings.extend(paged(f"/shops/{SHOP_ID}/listings", token, {"state": state}))
+        except Exception as e:
+            print(f"AVISO: listings state={state} falhou ({e})")
+    return all_listings
+
+
+# ------------------------- agregação -------------------------
+def day_key(ts):
+    return datetime.fromtimestamp(ts, tz=TZ_BR).strftime("%Y-%m-%d")
+
+
+def receipt_amount(r):
+    gt = r.get("grandtotal") or {}
+    return (gt.get("amount", 0) or 0) / max(gt.get("divisor", 100) or 100, 1)
+
+
+def receipt_currency(r):
+    gt = r.get("grandtotal") or {}
+    return gt.get("currency_code", "USD")
+
+
+def merge_receipts_into_daily(daily, receipts):
+    currency = None
+    for r in receipts:
+        ts = r.get("created_timestamp") or r.get("create_timestamp")
+        if not ts:
+            continue
+        dk = day_key(ts)
+        d = daily.setdefault(dk, {"gross": 0.0, "net": 0.0, "fees": 0.0, "orders": 0, "_ids": []})
+        rid = r.get("receipt_id")
+        # evita contar o mesmo pedido duas vezes ao mesclar períodos
+        if rid and rid in d.get("_ids", []):
+            continue
+        amt = receipt_amount(r)
+        d["gross"] = round(d["gross"] + amt, 2)
+        d["orders"] += 1
+        if rid:
+            d.setdefault("_ids", []).append(rid)
+        if currency is None:
+            currency = receipt_currency(r)
+    return currency
+
+
+def merge_fees_into_daily(daily, ledger_entries):
+    for e in ledger_entries:
+        ts = e.get("create_date") or e.get("created_timestamp")
+        if not ts:
+            continue
+        amt_obj = e.get("amount")
+        if isinstance(amt_obj, dict):
+            amount = (amt_obj.get("amount", 0) or 0) / max(amt_obj.get("divisor", 100) or 100, 1)
+        else:
+            amount = (amt_obj or 0) / 100
+        if amount >= 0:
+            continue  # só nos interessam débitos (taxas)
+        dk = day_key(ts)
+        d = daily.setdefault(dk, {"gross": 0.0, "net": 0.0, "fees": 0.0, "orders": 0, "_ids": []})
+        d["fees"] = round(d["fees"] + abs(amount), 2)
+
+
+def finalize_daily(daily):
+    for dk, d in daily.items():
+        d["net"] = round(max(0.0, d["gross"] - d.get("fees", 0.0)), 2)
+        d.pop("_ids", None)
+
+
+def build_products(listings, transactions):
+    products = {}
+    for l in listings:
+        lid = str(l.get("listing_id"))
+        products[lid] = {
+            "name": l.get("title", "Sem título"),
+            "favorites": l.get("num_favorers", 0),
+            "monthly": {},
+        }
+    for t in transactions:
+        lid = str(t.get("listing_id"))
+        ts = t.get("paid_timestamp") or t.get("created_timestamp") or t.get("create_timestamp")
+        if not ts:
+            continue
+        mk = datetime.fromtimestamp(ts, tz=TZ_BR).strftime("%Y-%m")
+        price_obj = t.get("price") or {}
+        price = (price_obj.get("amount", 0) or 0) / max(price_obj.get("divisor", 100) or 100, 1)
+        qty = t.get("quantity", 1) or 1
+        p = products.setdefault(lid, {"name": t.get("title", "Sem título"), "favorites": 0, "monthly": {}})
+        m = p["monthly"].setdefault(mk, {"sales": 0, "revenue": 0.0})
+        m["sales"] += qty
+        m["revenue"] = round(m["revenue"] + price * qty, 2)
+    return products
 
 
 def compute_cadence(listings):
     now = datetime.now(timezone.utc)
-    created_dates = []
-    for l in listings:
+    active = [l for l in listings if l.get("state") == "active"]
+    dates = []
+    for l in active:
         ts = l.get("created_timestamp") or l.get("creation_timestamp")
         if ts:
-            created_dates.append(datetime.fromtimestamp(ts, tz=timezone.utc))
-    if not created_dates:
-        return {"days_since_last": None, "active_count": len(listings), "created_last_30d": 0}
-    most_recent = max(created_dates)
-    days_since_last = (now - most_recent).days
-    created_last_30d = sum(1 for d in created_dates if (now - d).days <= 30)
+            dates.append(datetime.fromtimestamp(ts, tz=timezone.utc))
+    if not dates:
+        return {"days_since_last": None, "active_count": len(active), "created_last_30d": 0}
+    most_recent = max(dates)
     return {
-        "days_since_last": days_since_last,
-        "active_count": len(listings),
-        "created_last_30d": created_last_30d,
+        "days_since_last": (now - most_recent).days,
+        "active_count": len(active),
+        "created_last_30d": sum(1 for d in dates if (now - d).days <= 30),
     }
 
 
-def compute_visit_deltas(listings, previous_state):
-    prev_views = previous_state.get("listing_views", {})
-    deltas = {}
-    new_views_snapshot = {}
-    for l in listings:
-        lid = str(l["listing_id"])
-        views_now = l.get("views", 0) or 0
-        new_views_snapshot[lid] = views_now
-        prev = prev_views.get(lid, views_now)
-        deltas[lid] = max(0, views_now - prev)
-    return deltas, new_views_snapshot
-
-
-def build_output(listings, receipts, ledger_entries, visit_deltas, cadence):
-    gross = sum(r.get("grandtotal", {}).get("amount", 0) / 100 for r in receipts)
-    fees = sum(abs(e.get("amount", {}).get("amount", 0) / 100)
-               for e in ledger_entries if e.get("amount", {}).get("amount", 0) < 0)
-    net = gross - fees if ledger_entries else gross
-    orders = len(receipts)
-
-    products = []
-    for l in listings:
-        lid = str(l["listing_id"])
-        products.append({
-            "listing_id": lid,
-            "name": l.get("title", "Sem título"),
-            "visits": visit_deltas.get(lid, 0),
-            "favorites": l.get("num_favorers", 0),
-        })
-
-    now_br = datetime.now(TZ_BR)
-    active_window = 8 <= now_br.hour < 24
-
-    return {
-        "last_updated": now_br.isoformat(),
-        "active_window": active_window,
-        "shop_id": SHOP_ID,
-        "today": {
-            "gross": round(gross, 2),
-            "net": round(net, 2),
-            "orders": orders,
-            "avg_ticket": round(gross / orders, 2) if orders else 0,
-        },
-        "cadence": cadence,
-        "products": products,
-    }
-
-
+# ------------------------- main -------------------------
 def main():
     global SHOP_ID
 
-    previous_state = {}
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            previous_state = json.load(f)
+    hist = None
+    if os.path.exists(HIST_FILE):
+        with open(HIST_FILE, "r", encoding="utf-8") as f:
+            hist = json.load(f)
 
+    full_load = hist is None
     token = refresh_access_token()
-
     SHOP_ID = get_shop_id(token)
-    print(f"Shop ID detectado: {SHOP_ID}")
+    print(f"Shop ID: {SHOP_ID} | Carga: {'COMPLETA (primeira vez)' if full_load else 'incremental'}")
 
-    midnight_today = datetime.now(TZ_BR).replace(hour=0, minute=0, second=0, microsecond=0)
-    since_ts = int(midnight_today.timestamp())
+    daily = hist.get("daily", {}) if hist else {}
+    # restaura _ids vazios (não persistimos ids antigos; dedupe vale por execução)
+    for d in daily.values():
+        d.setdefault("_ids", [])
 
-    receipts = fetch_receipts(token, since_ts)
-    ledger_entries = fetch_ledger_entries(token, since_ts)
-    listings = fetch_all_listings(token)
+    if full_load:
+        since = None  # tudo, desde sempre
+    else:
+        cutoff = datetime.now(TZ_BR) - timedelta(days=7)
+        since = int(cutoff.timestamp())
+        # zera os últimos 7 dias para recalcular do zero (evita duplicar)
+        for i in range(8):
+            dk = (datetime.now(TZ_BR) - timedelta(days=i)).strftime("%Y-%m-%d")
+            daily.pop(dk, None)
+
+    receipts = fetch_receipts(token, since)
+    print(f"Pedidos obtidos: {len(receipts)}")
+    currency_code = merge_receipts_into_daily(daily, receipts)
+
+    ledger = fetch_ledger(token, since)
+    print(f"Lançamentos do ledger: {len(ledger)}")
+    merge_fees_into_daily(daily, ledger)
+    finalize_daily(daily)
+
+    listings = fetch_listings(token)
+    print(f"Anúncios: {len(listings)}")
+
+    transactions = fetch_transactions(token) if full_load else fetch_transactions(token)
+    print(f"Transações: {len(transactions)}")
+    products = build_products(listings, transactions)
 
     cadence = compute_cadence(listings)
-    visit_deltas, new_views_snapshot = compute_visit_deltas(listings, previous_state)
 
-    output = build_output(listings, receipts, ledger_entries, visit_deltas, cadence)
+    cur_symbol = {"USD": "US$", "BRL": "R$", "EUR": "€"}.get(currency_code or "USD", currency_code or "US$")
+    out = {
+        "generated_at": datetime.now(TZ_BR).isoformat(),
+        "currency": cur_symbol,
+        "shop_id": SHOP_ID,
+        "daily": daily,
+        "cadence": cadence,
+        "products": products,
+    }
+    with open(HIST_FILE, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False)
 
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
-
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump({"listing_views": new_views_snapshot, "saved_at": time.time()}, f)
-
-    print(f"OK — {output['today']['orders']} pedidos, líquido R${output['today']['net']:.2f}")
+    total = sum(d.get("gross", 0) for d in daily.values())
+    print(f"OK — {len(daily)} dias no histórico, faturamento acumulado {cur_symbol}{total:.2f}")
 
 
 if __name__ == "__main__":
