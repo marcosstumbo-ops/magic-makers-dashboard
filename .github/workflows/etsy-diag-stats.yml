@@ -1,0 +1,42 @@
+name: "Etsy — Diagnóstico de stats"
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar requests
+        run: pip install requests
+      - name: Testar endpoints de stats
+        env:
+          ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
+          ETSY_SHARED_SECRET: ${{ secrets.ETSY_SHARED_SECRET }}
+          ETSY_REFRESH_TOKEN: ${{ secrets.ETSY_REFRESH_TOKEN }}
+        run: |
+          python3 - << 'EOF'
+          import os, requests
+          API_KEY=os.environ["ETSY_API_KEY"]; SECRET=os.environ["ETSY_SHARED_SECRET"]; REFRESH=os.environ["ETSY_REFRESH_TOKEN"]
+          BASE="https://api.etsy.com/v3/application"
+          tok=requests.post("https://api.etsy.com/v3/public/oauth/token",data={"grant_type":"refresh_token","client_id":API_KEY,"refresh_token":REFRESH}).json()["access_token"]
+          H={"x-api-key":f"{API_KEY}:{SECRET}","Authorization":f"Bearer {tok}"}
+          uid=tok.split(".")[0]
+          shops=requests.get(f"{BASE}/users/{uid}/shops",headers=H).json()
+          sid=shops.get("shop_id") or shops["results"][0]["shop_id"]
+          # tenta vários caminhos possíveis de stats
+          testes=[
+            f"/shops/{sid}/stats",
+            f"/shops/{sid}/stats/daily",
+            f"/shops/{sid}/shop-stats",
+            f"/shops/{sid}/visits",
+            f"/shops/{sid}/traffic",
+            f"/shops/{sid}/listings/stats",
+          ]
+          for path in testes:
+              try:
+                  r=requests.get(f"{BASE}{path}",headers=H,params={"limit":1})
+                  print(f"{path} -> {r.status_code}: {r.text[:120]}")
+              except Exception as e:
+                  print(f"{path} -> ERRO {e}")
+          EOF
