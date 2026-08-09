@@ -203,7 +203,7 @@ let selectedMonth = null; // "2026-08"
 
 // Fuso da LOJA na Etsy (mesmo valor do coletor). 0 = UTC.
 // Ajustar junto com SHOP_TZ_OFFSET do collector.py quando confirmarmos.
-const SHOP_TZ_OFFSET = 0; // em horas
+const SHOP_TZ_OFFSET = -4; // em horas; -4 = Leste EUA (horário de verão)
 
 function shopNow(){
   // "agora" no fuso da loja: pega o UTC e aplica o offset da loja

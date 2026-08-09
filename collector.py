@@ -38,7 +38,7 @@ HIST_FILE = "historico.json"
 # na conta. Deixamos aqui num único lugar para ajustar quando confirmarmos.
 # UTC (offset 0) costuma alinhar bem com o painel; se a loja usar horário
 # dos EUA, trocar para -5 (Eastern) ou -8 (Pacific), por exemplo.
-SHOP_TZ_OFFSET = 0  # em horas; 0 = UTC
+SHOP_TZ_OFFSET = -4  # em horas; -4 = Leste EUA (horário de verão)
 TZ_SHOP = timezone(timedelta(hours=SHOP_TZ_OFFSET))
 
 TZ_BR = timezone(timedelta(hours=-3))  # usado só para o carimbo "gerado em"
@@ -227,9 +227,9 @@ def compute_cadence(listings):
         # IMPORTANTE: usar a criação ORIGINAL, não created_timestamp —
         # este último muda toda vez que o anúncio é renovado (a cada 4 meses),
         # o que faria todos os produtos parecerem "criados hoje".
-        ts = (l.get("original_created_timestamp")
-              or l.get("original_creation_tsz")
-              or l.get("created_timestamp")
+        # Diagnóstico confirmou: o campo certo é original_creation_timestamp.
+        ts = (l.get("original_creation_timestamp")
+              or l.get("original_created_timestamp")
               or l.get("creation_timestamp"))
         if ts:
             dates.append(datetime.fromtimestamp(ts, tz=timezone.utc))
